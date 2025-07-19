@@ -1,4 +1,4 @@
-# විනය ශාඛාව - ශ්‍රී ලංකා පොලිස් මූලස්ථානය
+# විනය ශාඛාව - ශ්‍රී ලංකා පොලීසිය
 ## Disciplinary Branch Database Management System
 
 ### පද්ධතියේ විස්තරය | System Description
