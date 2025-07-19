@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <div class="login-header">
                             <i class="fas fa-shield-alt police-badge"></i>
                             <h2 class="mb-0">Disciplinary Branch</h2>
-                            <p class="mb-0">Sri Lanka Police Headquarters</p>
+                            <p class="mb-0">POLICE SPECIAL BRANCH</p>
                         </div>
                         
                         <div class="card-body p-4">

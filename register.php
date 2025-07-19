@@ -144,7 +144,7 @@ $ranks = [
                         <div class="register-header">
                             <i class="fas fa-user-plus police-badge"></i>
                             <h2 class="mb-0">Registration</h2>
-                            <p class="mb-0">Disciplinary Branch - Sri Lanka Police Headquarters</p>
+                            <p class="mb-0">Disciplinary Branch - POLICE SPECIAL BRANCH</p>
                         </div>
                         
                         <div class="card-body p-4">

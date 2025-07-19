@@ -5,82 +5,86 @@ requireLogin();
 $user = getCurrentUser();
 $error = '';
 $success = '';
+$charge_sheet = null;
 
-// Get available actions
-$stmt = $pdo->query("SELECT * FROM actions_taken ORDER BY action_name");
-$actions = $stmt->fetchAll();
-
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $file_number = sanitizeInput($_POST['file_number']);
-    $officer_rank = sanitizeInput($_POST['officer_rank']);
-    $official_number = sanitizeInput($_POST['official_number']);
-    $first_name = sanitizeInput($_POST['first_name']);
-    $last_name = sanitizeInput($_POST['last_name']);
-    $nic_number = sanitizeInput($_POST['nic_number']);
-    $police_id_number = sanitizeInput($_POST['police_id_number']);
-    $main_branch_name = sanitizeInput($_POST['main_branch_name']);
-    $sub_branch_name = sanitizeInput($_POST['sub_branch_name']);
-    $offense_description = sanitizeInput($_POST['offense_description']);
-    $offense_date = $_POST['offense_date'];
-    $investigating_officer = sanitizeInput($_POST['investigating_officer']);
-    $action_taken_id = (int)$_POST['action_taken_id'];
-    $status = sanitizeInput($_POST['status']);
-    
-    // Validation
-    if (empty($file_number) || empty($officer_rank) || empty($first_name) || empty($last_name) || 
-        empty($nic_number) || empty($police_id_number) || empty($main_branch_name) || 
-        empty($offense_description) || empty($offense_date) || empty($investigating_officer) || 
-        empty($action_taken_id) || empty($status)) {
-        $error = 'Please fill in all required fields (*)';
-    } else {
-        // Check if file number already exists
-        $stmt = $pdo->prepare("SELECT id FROM preliminary_investigations WHERE file_number = ?");
-        $stmt->execute([$file_number]);
-        if ($stmt->fetch()) {
-            $error = 'This file number is already in use';
-        } else {
-            // Insert new preliminary investigation
-            $stmt = $pdo->prepare("
-                INSERT INTO preliminary_investigations 
-                (file_number, officer_rank, official_number, first_name, last_name, nic_number, 
-                 police_id_number, main_branch_name, sub_branch_name, offense_description, offense_date, 
-                 investigating_officer, action_taken_id, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            
-            if ($stmt->execute([$file_number, $officer_rank, $official_number, $first_name, $last_name, 
-                               $nic_number, $police_id_number, $main_branch_name, $sub_branch_name, 
-                               $offense_description, $offense_date, $investigating_officer, $action_taken_id, $status])) {
-                $success = 'Preliminary investigation added successfully';
-                // Clear form data
-                $_POST = array();
-            } else {
-                $error = 'Error adding preliminary investigation';
-            }
-        }
-    }
+// Get charge sheet ID from URL
+if (!isset($_GET['id']) || empty($_GET['id'])) {
+    header('Location: charge_sheets.php');
+    exit();
 }
 
-$ranks = [
-    'ප්‍ර.පො.ප.' => 'ප්‍ර.පො.ප.',
-    'කා.ප්‍ර.පො.ප.' => 'කා.ප්‍ර.පො.ප.',
-    'පො.ප.' => 'පො.ප.',
-    'කා.පො.ප.' => 'කා.පො.ප.',
-    'උ.පො.ප.' => 'උ.පො.ප.',
-    'කා.උ.පො.ප.' => 'කා.උ.පො.ප.',
-    'පො.සැ.' => 'පො.සැ.',
-    'කා.පො.සැ.' => 'කා.පො.සැ.',
-    'පො.කො.' => 'පො.කො.',
-    'කා.පො.කො.' => 'කා.පො.කො.',
-    'පො.සැ.රි.' => 'පො.සැ.රි.',
-    'පො.කො.රි.' => 'පො.කො.රි.'
-];
+$charge_sheet_id = (int)$_GET['id'];
 
-$statuses = [
-    'විමර්ෂණයේ පවතී' => 'Under Investigation',
-    'අවසන් කර ඇත' => 'Completed',
-    'වෙනත් ස්ථානයකට මාරු කර ඇත' => 'Transferred to Another Location'
-];
+// Get charge sheet with related preliminary investigation data
+$stmt = $pdo->prepare("
+    SELECT cs.*, pi.file_number, pi.officer_rank, pi.official_number, 
+           pi.first_name, pi.last_name, pi.nic_number, pi.police_id_number,
+           pi.main_branch_name, pi.sub_branch_name, pi.offense_description
+    FROM charge_sheets cs
+    JOIN preliminary_investigations pi ON cs.pi_id = pi.id
+    WHERE cs.id = ?
+");
+$stmt->execute([$charge_sheet_id]);
+$charge_sheet = $stmt->fetch();
+
+if (!$charge_sheet) {
+    $_SESSION['error'] = 'Charge sheet not found';
+    header('Location: charge_sheets.php');
+    exit();
+}
+
+// Handle form submission for updating charge sheet
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_charge_sheet'])) {
+    $charge_sheet_number = sanitizeInput($_POST['charge_sheet_number']);
+    $issued_date = $_POST['issued_date'];
+    $disciplinary_order_number = sanitizeInput($_POST['disciplinary_order_number']);
+    $transfer_order_number = sanitizeInput($_POST['transfer_order_number']);
+    $transfer_date = !empty($_POST['transfer_date']) ? $_POST['transfer_date'] : null;
+    $suspension_order_number = sanitizeInput($_POST['suspension_order_number']);
+    $suspension_date = !empty($_POST['suspension_date']) ? $_POST['suspension_date'] : null;
+    $reinstate_order_number = sanitizeInput($_POST['reinstate_order_number']);
+    $reinstate_date = !empty($_POST['reinstate_date']) ? $_POST['reinstate_date'] : null;
+    
+    if (!empty($charge_sheet_number) && !empty($issued_date)) {
+        // Check if charge sheet number already exists for other records
+        $stmt = $pdo->prepare("SELECT id FROM charge_sheets WHERE charge_sheet_number = ? AND id != ?");
+        $stmt->execute([$charge_sheet_number, $charge_sheet_id]);
+        if ($stmt->fetch()) {
+            $error = 'This charge sheet number is already in use';
+        } else {
+            $stmt = $pdo->prepare("
+                UPDATE charge_sheets SET
+                charge_sheet_number = ?, issued_date = ?, disciplinary_order_number = ?, 
+                transfer_order_number = ?, transfer_date = ?, suspension_order_number = ?, 
+                suspension_date = ?, reinstate_order_number = ?, reinstate_date = ?,
+                updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ");
+            
+            if ($stmt->execute([$charge_sheet_number, $issued_date, $disciplinary_order_number, 
+                               $transfer_order_number, $transfer_date, $suspension_order_number, 
+                               $suspension_date, $reinstate_order_number, $reinstate_date, $charge_sheet_id])) {
+                $success = 'Charge sheet updated successfully';
+                
+                // Refresh charge sheet data
+                $stmt = $pdo->prepare("
+                    SELECT cs.*, pi.file_number, pi.officer_rank, pi.official_number, 
+                           pi.first_name, pi.last_name, pi.nic_number, pi.police_id_number,
+                           pi.main_branch_name, pi.sub_branch_name, pi.offense_description
+                    FROM charge_sheets cs
+                    JOIN preliminary_investigations pi ON cs.pi_id = pi.id
+                    WHERE cs.id = ?
+                ");
+                $stmt->execute([$charge_sheet_id]);
+                $charge_sheet = $stmt->fetch();
+            } else {
+                $error = 'Error updating charge sheet';
+            }
+        }
+    } else {
+        $error = 'Please fill in required fields';
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -88,10 +92,9 @@ $statuses = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add New Preliminary Investigation - Disciplinary Branch SBHQ</title>
+    <title>Edit Charge Sheet - Disciplinary Branch SBHQ</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala:wght@300;400;500;600;700&display=swap');
         
@@ -208,7 +211,7 @@ $statuses = [
             margin-right: 10px;
         }
      
-      
+     
         /* Developer Credit */
         .developer-credit {
             position: absolute;
@@ -325,12 +328,26 @@ $statuses = [
         }
         
         /* Form Styles */
-        .form-card {
+        .form-card, .info-card {
             background: white;
             border-radius: 15px;
             padding: 2rem;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
             margin-bottom: 2rem;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 1.5rem 2rem;
+            border-radius: 15px 15px 0 0;
+            margin: -2rem -2rem 2rem -2rem;
+        }
+        
+        .card-title {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 600;
         }
         
         .form-control, .form-select {
@@ -341,8 +358,8 @@ $statuses = [
         }
         
         .form-control:focus, .form-select:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            border-color: #f39c12;
+            box-shadow: 0 0 0 0.2rem rgba(243, 156, 18, 0.25);
         }
         
         .form-label {
@@ -356,7 +373,7 @@ $statuses = [
         }
         
         .btn-submit {
-            background: linear-gradient(135deg, #27ae60, #229954);
+            background: linear-gradient(135deg, #f39c12, #e67e22);
             border: none;
             border-radius: 10px;
             padding: 12px 30px;
@@ -367,7 +384,7 @@ $statuses = [
         
         .btn-submit:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(39, 174, 96, 0.3);
+            box-shadow: 0 8px 25px rgba(243, 156, 18, 0.3);
             color: white;
         }
         
@@ -386,6 +403,38 @@ $statuses = [
             background: #5a6268;
             color: white;
             text-decoration: none;
+        }
+        
+        /* Officer Info Display */
+        .officer-info {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        
+        .info-row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+            align-items: flex-start;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            min-width: 150px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-value {
+            flex: 1;
+            word-wrap: break-word;
+        }
+        
+        .info-value.sinhala {
+            font-family: 'Noto Sans Sinhala', sans-serif;
+            font-size: 1.1rem;
         }
         
         /* Overlay */
@@ -424,6 +473,15 @@ $statuses = [
             .page-title {
                 font-size: 1.4rem;
             }
+            
+            .info-row {
+                flex-direction: column;
+            }
+            
+            .info-label {
+                min-width: auto;
+                margin-bottom: 0.25rem;
+            }
         }
     </style>
 </head>
@@ -459,7 +517,7 @@ $statuses = [
     
     <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
- 
+  
     <!-- Main Content -->
     <div class="main-content">
         <!-- Enhanced Header -->
@@ -470,8 +528,8 @@ $statuses = [
                         <i class="fas fa-bars"></i>
                     </button>
                     <div class="ms-3">
-                        <h1 class="page-title">Add New Preliminary Investigation</h1>
-                        <div class="header-subtitle">Create new investigation record</div>
+                        <h1 class="page-title">Edit Charge Sheet</h1>
+                        <div class="header-subtitle">Update charge sheet information</div>
                     </div>
                 </div>
                 
@@ -495,7 +553,79 @@ $statuses = [
         
         <!-- Content -->
         <div class="content-wrapper">
+            <!-- Officer Information Display -->
+            <div class="info-card">
+                <h5 class="mb-4">
+                    <i class="fas fa-user me-2"></i>
+                    Officer Information
+                </h5>
+                
+                <div class="officer-info">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <i class="fas fa-star me-2"></i>Rank & Number:
+                                </div>
+                                <div class="info-value">
+                                    <strong><?php echo $charge_sheet['officer_rank'] . ' ' . $charge_sheet['official_number']; ?></strong>
+                                </div>
+                            </div>
+                            
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <i class="fas fa-user me-2"></i>Name:
+                                </div>
+                                <div class="info-value sinhala">
+                                    <strong><?php echo $charge_sheet['first_name'] . ' ' . $charge_sheet['last_name']; ?></strong>
+                                </div>
+                            </div>
+                            
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <i class="fas fa-folder me-2"></i>File Number:
+                                </div>
+                                <div class="info-value">
+                                    <strong><?php echo $charge_sheet['file_number']; ?></strong>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <i class="fas fa-id-card me-2"></i>NIC:
+                                </div>
+                                <div class="info-value">
+                                    <?php echo $charge_sheet['nic_number']; ?>
+                                </div>
+                            </div>
+                            
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <i class="fas fa-building me-2"></i>Branch:
+                                </div>
+                                <div class="info-value sinhala">
+                                    <?php echo $charge_sheet['main_branch_name']; ?>
+                                    <?php if (!empty($charge_sheet['sub_branch_name'])): ?>
+                                        / <?php echo $charge_sheet['sub_branch_name']; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Edit Form -->
             <div class="form-card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="fas fa-edit me-2"></i>
+                        Edit Charge Sheet Details
+                    </h5>
+                </div>
+                
                 <?php if ($error): ?>
                     <div class="alert alert-danger" role="alert">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -512,179 +642,114 @@ $statuses = [
                 
                 <form method="POST" action="">
                     <div class="row">
-                        <!-- File Number -->
                         <div class="col-md-6 mb-3">
-                            <label for="file_number" class="form-label">
-                                <i class="fas fa-folder me-2"></i>Preliminary Investigation Number (File Number) <span class="required">*</span>
+                            <label for="charge_sheet_number" class="form-label">
+                                <i class="fas fa-hashtag me-2"></i>Charge Sheet Number <span class="required">*</span> (Sinhala)
                             </label>
-                            <input type="text" class="form-control" id="file_number" name="file_number" 
-                                   value="<?php echo isset($_POST['file_number']) ? $_POST['file_number'] : ''; ?>" required>
+                            <input type="text" class="form-control" id="charge_sheet_number" name="charge_sheet_number" 
+                                   value="<?php echo htmlspecialchars($charge_sheet['charge_sheet_number']); ?>" required>
                         </div>
                         
-                        <!-- Officer Rank -->
                         <div class="col-md-6 mb-3">
-                            <label for="officer_rank" class="form-label">
-                                <i class="fas fa-star me-2"></i>Officer's Rank <span class="required">*</span>
+                            <label for="issued_date" class="form-label">
+                                <i class="fas fa-calendar me-2"></i>Issue Date <span class="required">*</span>
                             </label>
-                            <select class="form-select" id="officer_rank" name="officer_rank" required>
-                                <option value="">Select Rank</option>
-                                <?php foreach ($ranks as $key => $value): ?>
-                                    <option value="<?php echo $key; ?>" <?php echo (isset($_POST['officer_rank']) && $_POST['officer_rank'] == $key) ? 'selected' : ''; ?>>
-                                        <?php echo $key; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <input type="date" class="form-control" id="issued_date" name="issued_date" 
+                                   value="<?php echo $charge_sheet['issued_date']; ?>" required>
                         </div>
                     </div>
                     
-                    <div class="row">
-                        <!-- Official Number -->
-                        <div class="col-md-6 mb-3">
-                            <label for="official_number" class="form-label">
-                                <i class="fas fa-id-badge me-2"></i>Official Number
-                            </label>
-                            <input type="text" class="form-control" id="official_number" name="official_number" 
-                                   value="<?php echo isset($_POST['official_number']) ? $_POST['official_number'] : ''; ?>" 
-                                   placeholder="Some ranks may have this">
-                        </div>
-                        
-                        <!-- First Name -->
-                        <div class="col-md-6 mb-3">
-                            <label for="first_name" class="form-label">
-                                <i class="fas fa-user me-2"></i>First Name <span class="required">*</span> (Sinhala)
-                            </label>
-                            <input type="text" class="form-control" id="first_name" name="first_name" 
-                                   value="<?php echo isset($_POST['first_name']) ? $_POST['first_name'] : ''; ?>" required>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <!-- Last Name -->
-                        <div class="col-md-6 mb-3">
-                            <label for="last_name" class="form-label">
-                                <i class="fas fa-user me-2"></i>Last Name <span class="required">*</span> (Sinhala)
-                            </label>
-                            <input type="text" class="form-control" id="last_name" name="last_name" 
-                                   value="<?php echo isset($_POST['last_name']) ? $_POST['last_name'] : ''; ?>" required>
-                        </div>
-                        
-                        <!-- NIC Number -->
-                        <div class="col-md-6 mb-3">
-                            <label for="nic_number" class="form-label">
-                                <i class="fas fa-id-card me-2"></i>National Identity Card Number <span class="required">*</span>
-                            </label>
-                            <input type="text" class="form-control" id="nic_number" name="nic_number" 
-                                   value="<?php echo isset($_POST['nic_number']) ? $_POST['nic_number'] : ''; ?>" 
-                                   required placeholder="123456789V or 200012345678">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <!-- Police ID Number -->
-                        <div class="col-md-6 mb-3">
-                            <label for="police_id_number" class="form-label">
-                                <i class="fas fa-shield-alt me-2"></i>Police Identity Card Number <span class="required">*</span>
-                            </label>
-                            <input type="text" class="form-control" id="police_id_number" name="police_id_number" 
-                                   value="<?php echo isset($_POST['police_id_number']) ? $_POST['police_id_number'] : ''; ?>" required>
-                        </div>
-                        
-                        <!-- Offense Date -->
-                        <div class="col-md-6 mb-3">
-                            <label for="offense_date" class="form-label">
-                                <i class="fas fa-calendar me-2"></i>Offense Date <span class="required">*</span>
-                            </label>
-                            <input type="date" class="form-control" id="offense_date" name="offense_date" 
-                                   value="<?php echo isset($_POST['offense_date']) ? $_POST['offense_date'] : ''; ?>" required>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <!-- Officer Attached Main Branch Name -->
-                        <div class="col-md-6 mb-3">
-                            <label for="main_branch_name" class="form-label">
-                                <i class="fas fa-building me-2"></i>Officer Attached Main Branch Name <span class="required">*</span> (Sinhala)
-                            </label>
-                            <input type="text" class="form-control" id="main_branch_name" name="main_branch_name" 
-                                   value="<?php echo isset($_POST['main_branch_name']) ? $_POST['main_branch_name'] : ''; ?>" 
-                                   required placeholder="e.g., අනුරාධපුර විශේෂ කාර්යාංශ ප්‍රධාන ඒකකය">
-                        </div>
-                        
-                        <!-- Officer Attached Sub Branch Name -->
-                        <div class="col-md-6 mb-3">
-                            <label for="sub_branch_name" class="form-label">
-                                <i class="fas fa-sitemap me-2"></i>Officer Attached Sub Branch Name (Sinhala)
-                            </label>
-                            <input type="text" class="form-control" id="sub_branch_name" name="sub_branch_name" 
-                                   value="<?php echo isset($_POST['sub_branch_name']) ? $_POST['sub_branch_name'] : ''; ?>" 
-                                   placeholder="e.g., අනුරාධපුර උප ඒකකය">
-                        </div>
-                    </div>
-                    
-                    <!-- Offense Description -->
                     <div class="mb-3">
-                        <label for="offense_description" class="form-label">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Offense Description <span class="required">*</span> (Sinhala)
+                        <label for="disciplinary_order_number" class="form-label">
+                            <i class="fas fa-file-alt me-2"></i>Disciplinary Order Number (Sinhala)
                         </label>
-                        <textarea class="form-control" id="offense_description" name="offense_description" rows="4" 
-                                  required placeholder="Enter offense description in Sinhala"><?php echo isset($_POST['offense_description']) ? $_POST['offense_description'] : ''; ?></textarea>
-                    </div>
-                    
-                    <!-- Investigating Officer -->
-                    <div class="mb-3">
-                        <label for="investigating_officer" class="form-label">
-                            <i class="fas fa-search me-2"></i>Investigating Officer <span class="required">*</span> (Sinhala)
-                        </label>
-                        <input type="text" class="form-control" id="investigating_officer" name="investigating_officer" 
-                               value="<?php echo isset($_POST['investigating_officer']) ? $_POST['investigating_officer'] : ''; ?>" 
-                               required placeholder="Enter investigating officer name in Sinhala">
+                        <input type="text" class="form-control" id="disciplinary_order_number" name="disciplinary_order_number" 
+                               value="<?php echo htmlspecialchars($charge_sheet['disciplinary_order_number']); ?>">
                     </div>
                     
                     <div class="row">
-                        <!-- Action Taken -->
                         <div class="col-md-6 mb-3">
-                            <label for="action_taken_id" class="form-label">
-                                <i class="fas fa-cogs me-2"></i>Action Taken <span class="required">*</span>
+                            <label for="transfer_order_number" class="form-label">
+                                <i class="fas fa-exchange-alt me-2"></i>Transfer Order Number (Sinhala)
                             </label>
-                            <select class="form-select" id="action_taken_id" name="action_taken_id" required>
-                                <option value="">Select Action</option>
-                                <?php foreach ($actions as $action): ?>
-                                    <option value="<?php echo $action['id']; ?>" <?php echo (isset($_POST['action_taken_id']) && $_POST['action_taken_id'] == $action['id']) ? 'selected' : ''; ?>>
-                                        <?php echo $action['action_name']; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <input type="text" class="form-control" id="transfer_order_number" name="transfer_order_number" 
+                                   value="<?php echo htmlspecialchars($charge_sheet['transfer_order_number']); ?>">
                         </div>
                         
-                        <!-- Status -->
                         <div class="col-md-6 mb-3">
-                            <label for="status" class="form-label">
-                                <i class="fas fa-info-circle me-2"></i>Status <span class="required">*</span>
+                            <label for="transfer_date" class="form-label">
+                                <i class="fas fa-calendar me-2"></i>Transfer Date
                             </label>
-                            <select class="form-select" id="status" name="status" required>
-                                <option value="">Select Status</option>
-                                <?php foreach ($statuses as $key => $value): ?>
-                                    <option value="<?php echo $key; ?>" <?php echo (isset($_POST['status']) && $_POST['status'] == $key) ? 'selected' : ''; ?>>
-                                        <?php echo $value; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <input type="date" class="form-control" id="transfer_date" name="transfer_date" 
+                                   value="<?php echo $charge_sheet['transfer_date']; ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="suspension_order_number" class="form-label">
+                                <i class="fas fa-pause me-2"></i>Suspension Order Number (Sinhala)
+                            </label>
+                            <input type="text" class="form-control" id="suspension_order_number" name="suspension_order_number" 
+                                   value="<?php echo htmlspecialchars($charge_sheet['suspension_order_number']); ?>">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="suspension_date" class="form-label">
+                                <i class="fas fa-calendar me-2"></i>Suspension Date
+                            </label>
+                            <input type="date" class="form-control" id="suspension_date" name="suspension_date" 
+                                   value="<?php echo $charge_sheet['suspension_date']; ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="reinstate_order_number" class="form-label">
+                                <i class="fas fa-play me-2"></i>Reinstatement Order Number (Sinhala)
+                            </label>
+                            <input type="text" class="form-control" id="reinstate_order_number" name="reinstate_order_number" 
+                                   value="<?php echo htmlspecialchars($charge_sheet['reinstate_order_number']); ?>">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="reinstate_date" class="form-label">
+                                <i class="fas fa-calendar me-2"></i>Reinstatement Date
+                            </label>
+                            <input type="date" class="form-control" id="reinstate_date" name="reinstate_date" 
+                                   value="<?php echo $charge_sheet['reinstate_date']; ?>">
                         </div>
                     </div>
                     
                     <!-- Form Actions -->
                     <div class="d-flex justify-content-between mt-4">
-                        <a href="preliminary_investigation.php" class="btn btn-cancel">
+                        <a href="charge_sheets.php" class="btn btn-cancel">
                             <i class="fas fa-arrow-left me-2"></i>
                             Cancel
                         </a>
                         
-                        <button type="submit" class="btn btn-submit">
+                        <button type="submit" name="update_charge_sheet" class="btn btn-submit">
                             <i class="fas fa-save me-2"></i>
-                            Save Preliminary Investigation
+                            Update Charge Sheet
                         </button>
                     </div>
                 </form>
+            </div>
+            
+            <!-- Additional Actions -->
+            <div class="form-card">
+                <h6 class="mb-3">
+                    <i class="fas fa-tools me-2"></i>
+                    Additional Actions
+                </h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="view_charge_sheet.php?id=<?php echo $charge_sheet_id; ?>" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-eye me-2"></i>View Details
+                    </a>
+                    <a href="print_charge_sheet.php?id=<?php echo $charge_sheet_id; ?>" class="btn btn-outline-info btn-sm" target="_blank">
+                        <i class="fas fa-print me-2"></i>Print Charge Sheet
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -731,16 +796,34 @@ $statuses = [
             }
         });
         
-        // NIC validation
-        document.getElementById('nic_number').addEventListener('input', function() {
-            const nic = this.value.trim();
-            const oldNicPattern = /^[0-9]{9}[VvXx]$/;
-            const newNicPattern = /^[0-9]{12}$/;
+        // Date validation - ensure dates are logical
+        document.getElementById('transfer_date').addEventListener('change', function() {
+            const issuedDate = new Date(document.getElementById('issued_date').value);
+            const transferDate = new Date(this.value);
             
-            if (nic && !oldNicPattern.test(nic) && !newNicPattern.test(nic)) {
-                this.classList.add('is-invalid');
-            } else {
-                this.classList.remove('is-invalid');
+            if (this.value && transferDate < issuedDate) {
+                alert('Transfer date cannot be before the issue date');
+                this.value = '';
+            }
+        });
+        
+        document.getElementById('suspension_date').addEventListener('change', function() {
+            const issuedDate = new Date(document.getElementById('issued_date').value);
+            const suspensionDate = new Date(this.value);
+            
+            if (this.value && suspensionDate < issuedDate) {
+                alert('Suspension date cannot be before the issue date');
+                this.value = '';
+            }
+        });
+        
+        document.getElementById('reinstate_date').addEventListener('change', function() {
+            const suspensionDate = new Date(document.getElementById('suspension_date').value);
+            const reinstateDate = new Date(this.value);
+            
+            if (this.value && suspensionDate && reinstateDate < suspensionDate) {
+                alert('Reinstatement date cannot be before the suspension date');
+                this.value = '';
             }
         });
     </script>
