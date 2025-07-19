@@ -43,6 +43,8 @@ $recent_investigations = $stmt->fetchAll();
     <title>Dashboard - Disciplinary Branch SBHQ</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" type="image/png" sizes="32x32" href="image/favicon.png">
+  
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala:wght@300;400;500;600;700&display=swap');
         
@@ -451,7 +453,8 @@ $recent_investigations = $stmt->fetchAll();
                     <li><a href="charge_sheets.php"><i class="fas fa-file-contract"></i> Charge Sheets</a></li>
                     <li><a href="formal_disciplinary_investigation.php"><i class="fas fa-gavel"></i> Formal Investigations</a></li>
                     <li><a href="summary.php"><i class="fas fa-chart-bar"></i> Summary & Reports</a></li>
-                    <li><a href="backup.php" class="active"><i class="fas fa-database"></i> Database Backup</a></li>
+                    <li><a href="delete_records.php"><i class="fas fa-trash-alt"></i> Delete Records</a></li>
+                    <li><a href="backup.php"><i class="fas fa-database"></i> Database Backup</a></li>
                     <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
                 </ul>
             </div>
