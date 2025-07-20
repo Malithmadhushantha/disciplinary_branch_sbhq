@@ -33,8 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_formal_investigati
             ");
             
             if ($stmt->execute([$pi_id, $investigation_number, $investigation_date, $conducting_officer, 
-                               $complaint_officer, $defense_officer, $notes])) {
-                $success = 'Formal disciplinary investigation added successfully';
+                            $complaint_officer, $defense_officer, $notes])) {
+                header('Location: formal_disciplinary_investigation.php?success=1');
+                exit();
             } else {
                 $error = 'Error adding formal disciplinary investigation';
             }

@@ -49,11 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ");
             
             if ($stmt->execute([$file_number, $officer_rank, $official_number, $first_name, $last_name, 
-                               $nic_number, $police_id_number, $main_branch_name, $sub_branch_name, 
-                               $offense_description, $offense_date, $investigating_officer, $action_taken_id, $status])) {
-                $success = 'Preliminary investigation added successfully';
-                // Clear form data
-                $_POST = array();
+                            $nic_number, $police_id_number, $main_branch_name, $sub_branch_name, 
+                            $offense_description, $offense_date, $investigating_officer, $action_taken_id, $status])) {
+                // Redirect to prevent duplicate submission
+                header('Location: add_new_pi.php?success=1');
+                exit();
             } else {
                 $error = 'Error adding preliminary investigation';
             }

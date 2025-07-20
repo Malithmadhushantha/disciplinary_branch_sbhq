@@ -20,7 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_action'])) {
         } else {
             $stmt = $pdo->prepare("INSERT INTO actions_taken (action_name, action_code) VALUES (?, ?)");
             if ($stmt->execute([$action_name, $action_code])) {
-                $success = 'Action added successfully';
+                header('Location: including_actions_taken.php?success=1');
+                exit();
             } else {
                 $error = 'Error adding action';
             }

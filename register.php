@@ -10,6 +10,7 @@ if (isLoggedIn()) {
 $error = '';
 $success = '';
 
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $rank = sanitizeInput($_POST['rank']);
     $official_number = sanitizeInput($_POST['official_number']);
@@ -36,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("INSERT INTO users (rank, official_number, name_with_initials, email, password) VALUES (?, ?, ?, ?, ?)");
             if ($stmt->execute([$rank, $official_number, $name_with_initials, $email, $hashed_password])) {
-                $success = 'Account created successfully. Redirecting to login page...';
-                header("refresh:2;url=login.php");
+                header('Location: register.php?success=1');
+                exit();
             } else {
                 $error = 'Error creating account';
             }

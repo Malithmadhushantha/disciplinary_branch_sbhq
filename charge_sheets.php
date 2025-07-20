@@ -35,9 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_charge_sheet'])) {
             ");
             
             if ($stmt->execute([$pi_id, $charge_sheet_number, $issued_date, $disciplinary_order_number, 
-                               $transfer_order_number, $transfer_date, $suspension_order_number, 
-                               $suspension_date, $reinstate_order_number, $reinstate_date])) {
-                $success = 'Charge sheet added successfully';
+                            $transfer_order_number, $transfer_date, $suspension_order_number, 
+                            $suspension_date, $reinstate_order_number, $reinstate_date])) {
+                header('Location: charge_sheets.php?success=1');
+                exit();
             } else {
                 $error = 'Error adding charge sheet';
             }
